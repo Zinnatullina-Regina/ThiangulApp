@@ -9,37 +9,64 @@
 <?import javafx.scene.layout.HBox?>
 <?import javafx.scene.layout.AnchorPane?>
 
-<BorderPane xmlns:fx="http://javafx.com/fxml/1"
-            xmlns="http://javafx.com/javafx/8.0.0"
-            fx:controller="org.example.huinia.controllers.ShapeController">
+<BorderPane xmlns:fx="http://javafx.com/fxml/1" fx:controller="org.example.huinia.controllers.ShapeController">
+
+    <!-- Верхняя панель с кнопками -->
     <top>
-        <HBox spacing="10" alignment="CENTER" style="-fx-background-color: #EEEEEE; -fx-padding: 10;">
-            <Button text="Сфера" onAction="#selectSphere"/>
-            <Button text="Куб" onAction="#selectCube"/>
-            <Button text="Пирамида" onAction="#selectPyramid"/>
-            <Button text="Цилиндр" onAction="#selectCylinder"/>
-            <Button fx:id="btnDeleteAll" text="Удалить все"/>
-            <Button fx:id="btnDeleteLast" text="Удалить последнюю"/>
-            <Button fx:id="btnDeleteSelected" text="Удалить выбранную"/>
+        <HBox spacing="10" alignment="CENTER" prefHeight="60"
+              style="-fx-background-color: #444444; -fx-padding: 10;">
+            <Button text="Сфера" onAction="#selectSphere"
+                    style="-fx-font-size: 16px; -fx-text-fill: white; -fx-background-color: #5A5A5A;"/>
+            <Button text="Куб" onAction="#selectCube"
+                    style="-fx-font-size: 16px; -fx-text-fill: white; -fx-background-color: #5A5A5A;"/>
+            <Button text="Пирамида" onAction="#selectPyramid"
+                    style="-fx-font-size: 16px; -fx-text-fill: white; -fx-background-color: #5A5A5A;"/>
+            <Button text="Цилиндр" onAction="#selectCylinder"
+                    style="-fx-font-size: 16px; -fx-text-fill: white; -fx-background-color: #5A5A5A;"/>
+            <Button fx:id="btnDeleteAll" text="Удалить все"
+                    style="-fx-font-size: 16px; -fx-text-fill: white; -fx-background-color: #AA0000;"/>
+            <Button fx:id="btnDeleteLast" text="Удалить последнюю"
+                    style="-fx-font-size: 16px; -fx-text-fill: white; -fx-background-color: #AA0000;"/>
+            <Button fx:id="btnDeleteSelected" text="Удалить выбранную"
+                    style="-fx-font-size: 16px; -fx-text-fill: white; -fx-background-color: #AA0000;"/>
         </HBox>
     </top>
+
+    <!-- Центральная область для 3D-сцены -->
     <center>
-        <!-- Увеличили размеры центрального холста, чтобы он не заходил на кнопки -->
-        <AnchorPane fx:id="canvas3D" prefHeight="600" prefWidth="800" style="-fx-background-color: transparent;"/>
+        <AnchorPane fx:id="canvas3D" prefWidth="800" prefHeight="600" style="-fx-background-color: #FFFFFF;">
+            <!-- Здесь может быть клип или дополнительные настройки, если потребуется -->
+        </AnchorPane>
     </center>
+
+    <!-- Нижняя панель с полями ввода -->
     <bottom>
-        <GridPane hgap="10" vgap="10" style="-fx-background-color: #DDDDDD; -fx-padding: 10;">
-            <Label text="Base X:" GridPane.rowIndex="0" GridPane.columnIndex="0"/>
-            <TextField fx:id="txtBaseX" GridPane.rowIndex="0" GridPane.columnIndex="1"/>
-            <Label text="Base Y:" GridPane.rowIndex="0" GridPane.columnIndex="2"/>
-            <TextField fx:id="txtBaseY" GridPane.rowIndex="0" GridPane.columnIndex="3"/>
-            <Label text="Width:" GridPane.rowIndex="1" GridPane.columnIndex="0"/>
-            <TextField fx:id="txtWidth" GridPane.rowIndex="1" GridPane.columnIndex="1"/>
-            <Label text="Depth:" GridPane.rowIndex="1" GridPane.columnIndex="2"/>
-            <TextField fx:id="txtDepth" GridPane.rowIndex="1" GridPane.columnIndex="3"/>
-            <Label text="Height:" GridPane.rowIndex="2" GridPane.columnIndex="0"/>
-            <TextField fx:id="txtHeight" GridPane.rowIndex="2" GridPane.columnIndex="1"/>
-            <Button text="Создать по координатам" onAction="#createShapeFromInput" GridPane.rowIndex="3" GridPane.columnIndex="0" GridPane.columnSpan="4"/>
+        <GridPane hgap="10" vgap="10" prefHeight="100"
+                  style="-fx-background-color: #EEEEEE; -fx-padding: 10;">
+            <padding>
+                <Insets top="10" right="10" bottom="5" left="10"/>
+            </padding>
+            <!-- Строка 0 -->
+            <Label text="Base X:" style="-fx-font-size: 16px; -fx-font-weight: bold;" GridPane.rowIndex="0" GridPane.columnIndex="0"/>
+            <TextField fx:id="txtBaseX" style="-fx-font-size: 16px;" GridPane.rowIndex="0" GridPane.columnIndex="1"/>
+            <Label text="Base Y:" style="-fx-font-size: 16px; -fx-font-weight: bold;" GridPane.rowIndex="0" GridPane.columnIndex="2"/>
+            <TextField fx:id="txtBaseY" style="-fx-font-size: 16px;" GridPane.rowIndex="0" GridPane.columnIndex="3"/>
+            <Label text="Height:" style="-fx-font-size: 16px; -fx-font-weight: bold;" GridPane.rowIndex="0" GridPane.columnIndex="4"/>
+            <TextField fx:id="txtHeight" style="-fx-font-size: 16px;" GridPane.rowIndex="0" GridPane.columnIndex="5"/>
+
+
+            <!-- Строка 1 -->
+            <Label text="Width:" style="-fx-font-size: 16px; -fx-font-weight: bold;" GridPane.rowIndex="1" GridPane.columnIndex="0"/>
+            <TextField fx:id="txtWidth" style="-fx-font-size: 16px;" GridPane.rowIndex="1" GridPane.columnIndex="1"/>
+            <Label text="Depth:" style="-fx-font-size: 16px; -fx-font-weight: bold;" GridPane.rowIndex="1" GridPane.columnIndex="2"/>
+            <TextField fx:id="txtDepth" style="-fx-font-size: 16px;" GridPane.rowIndex="1" GridPane.columnIndex="3"/>
+            <Button text="Создать по координатам" onAction="#createShapeFromInput"
+                    style="-fx-font-size: 16px; -fx-font-weight: bold;"
+                    GridPane.rowIndex="1" GridPane.columnIndex="4" GridPane.columnSpan="4"/>
+
+            <!-- Строка 2 -->
+
+
         </GridPane>
     </bottom>
 </BorderPane>

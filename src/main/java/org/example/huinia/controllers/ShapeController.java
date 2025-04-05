@@ -9,6 +9,7 @@ import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.TextField;
 import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyEvent;
 import javafx.scene.input.MouseButton;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.input.ScrollEvent;
@@ -24,6 +25,17 @@ import javafx.scene.shape.Sphere;
 import javafx.scene.shape.TriangleMesh;
 import javafx.scene.text.Font;
 import javafx.scene.transform.Rotate;
+import javafx.scene.DepthTest;
+import javafx.scene.PointLight;
+import javafx.scene.paint.Color;
+import javafx.scene.AmbientLight;
+import javafx.scene.paint.Color;
+
+// Внутри метода initialize() после создания contentGroup:
+
+
+import javafx.scene.shape.Shape;
+import javafx.scene.shape.Rectangle; // для клипа
 
 import java.util.ArrayList;
 import java.util.List;
@@ -33,6 +45,9 @@ public class ShapeController {
     @FXML private AnchorPane canvas3D;
     @FXML private Button btnDeleteAll, btnDeleteLast, btnDeleteSelected;
     @FXML private TextField txtBaseX, txtBaseY, txtWidth, txtDepth, txtHeight;
+
+    // Группа, содержащая все объекты (сетка, фигуры, подсказки), к которой применяются повороты
+    private Group contentGroup;
 
     private String selectedShape = "";
 
@@ -46,11 +61,10 @@ public class ShapeController {
     private double baseInitX, baseInitY;
     private Rectangle baseProjection;
 
-    private double heightInitScreen;
+    private double heightInitLocal;
     private double shapeHeight;
     private Line heightIndicator;
 
-    // Для поворота холста мышью (правая кнопка)
     private double lastMouseX, lastMouseY;
     private Rotate rotateX = new Rotate(0, 0, 0, 0, Rotate.X_AXIS);
     private Rotate rotateY = new Rotate(0, 0, 0, 0, Rotate.Y_AXIS);
@@ -59,24 +73,62 @@ public class ShapeController {
 
     @FXML
     public void initialize() {
+        // Включаем depth test для корректного 3D‑отображения
+        canvas3D.setDepthTest(DepthTest.ENABLE);
+
+        // Ограничиваем область canvas3D с помощью клипа, чтобы после трансформаций контент не выходил за пределы
+        Rectangle clip = new Rectangle();
+        clip.widthProperty().bind(canvas3D.widthProperty());
+        clip.heightProperty().bind(canvas3D.heightProperty());
+        canvas3D.setClip(clip);
+
+        // Создаём группу для содержимого, к которой будем применять повороты
+        contentGroup = new Group();
+        canvas3D.getChildren().add(contentGroup);
+
+        // Создаём сетку и добавляем её в contentGroup
         gridGroup = createFullGrid(canvas3D.getPrefWidth(), canvas3D.getPrefHeight(), 50);
-        canvas3D.getChildren().add(0, gridGroup);
+        gridGroup.setMouseTransparent(true); // Сетка не перехватывает события мыши
+        contentGroup.getChildren().add(0, gridGroup);
         gridGroup.translateXProperty().bind(Bindings.divide(canvas3D.widthProperty(), 2));
         gridGroup.translateYProperty().bind(Bindings.divide(canvas3D.heightProperty(), 2));
 
+        // Настраиваем точки вращения для поворотов
         rotateX.pivotXProperty().bind(Bindings.divide(canvas3D.widthProperty(), 2));
         rotateX.pivotYProperty().bind(Bindings.divide(canvas3D.heightProperty(), 2));
         rotateY.pivotXProperty().bind(Bindings.divide(canvas3D.widthProperty(), 2));
         rotateY.pivotYProperty().bind(Bindings.divide(canvas3D.heightProperty(), 2));
-        canvas3D.getTransforms().addAll(rotateX, rotateY);
+        contentGroup.getTransforms().addAll(rotateX, rotateY);
 
-        canvas3D.setOnMousePressed(event -> {
-            if (creationState == CreationState.WAITING && event.getButton() == MouseButton.SECONDARY) {
-                lastMouseX = event.getSceneX();
-                lastMouseY = event.getSceneY();
+        // Регистрируем обработчики событий через addEventFilter на canvas3D
+//        PointLight pointLight = new PointLight(Color.rgb(255, 255, 255, 0.5)); // Свет с пониженной яркостью
+//        pointLight.setTranslateX(100);   // смещение по оси X
+//        pointLight.setTranslateY(-50);   // смещение по оси Y
+//        pointLight.setTranslateZ(-300);  // смещение по оси Z
+//        contentGroup.getChildren().add(pointLight);
+
+        // Обработка нажатия мыши
+        canvas3D.addEventFilter(MouseEvent.MOUSE_PRESSED, event -> {
+            if (creationState == CreationState.WAITING) {
+                if (event.getButton() == MouseButton.SECONDARY) {
+                    // Начало вращения сцены
+                    lastMouseX = event.getSceneX();
+                    lastMouseY = event.getSceneY();
+                } else if (event.getButton() == MouseButton.PRIMARY) {
+                    // Выбор фигуры или снятие выбора
+                    Node picked = event.getPickResult().getIntersectedNode();
+                    if (picked != null && createdShapes.contains(picked)) {
+                        selectShape(picked);
+                        event.consume();
+                    } else {
+                        deselectShape();
+                    }
+                }
             }
         });
-        canvas3D.setOnMouseDragged(event -> {
+
+        // Обработка перетаскивания мыши
+        canvas3D.addEventFilter(MouseEvent.MOUSE_DRAGGED, event -> {
             if (creationState == CreationState.WAITING && event.getButton() == MouseButton.SECONDARY) {
                 double deltaX = event.getSceneX() - lastMouseX;
                 double deltaY = event.getSceneY() - lastMouseY;
@@ -90,40 +142,43 @@ public class ShapeController {
                 updateHeightIndicator(event);
             }
         });
-        canvas3D.setOnMouseReleased(event -> {
+
+        // Обработка отпускания мыши
+        canvas3D.addEventFilter(MouseEvent.MOUSE_RELEASED, event -> {
             if (creationState == CreationState.SETTING_BASE && event.getButton() == MouseButton.PRIMARY) {
+                Point2D localPoint = contentGroup.sceneToLocal(event.getSceneX(), event.getSceneY());
                 creationState = CreationState.SETTING_HEIGHT;
-                heightInitScreen = event.getY();
+                heightInitLocal = localPoint.getY();
                 System.out.println("Основание зафиксировано. Теперь задайте высоту (ось Z).");
-                createHeightIndicator(heightInitScreen);
+                createHeightIndicator(heightInitLocal);
             } else if (creationState == CreationState.SETTING_HEIGHT && event.getButton() == MouseButton.PRIMARY) {
-                shapeHeight = heightInitScreen - event.getY(); // инвертированное задание
+                Point2D localPoint = contentGroup.sceneToLocal(event.getSceneX(), event.getSceneY());
+                shapeHeight = heightInitLocal - localPoint.getY(); // Вычисляем высоту по разнице Y
                 System.out.println("Высота установлена: " + shapeHeight + ". Создаем фигуру.");
                 create3DShapeFromBaseAndHeight();
-                canvas3D.getChildren().remove(baseProjection);
-                canvas3D.getChildren().remove(heightIndicator);
+                contentGroup.getChildren().remove(baseProjection);
+                contentGroup.getChildren().remove(heightIndicator);
                 resetCreation();
             }
         });
-        canvas3D.setOnMouseClicked(event -> {
+
+        // Обработка двойного клика мыши
+        canvas3D.addEventFilter(MouseEvent.MOUSE_CLICKED, event -> {
             if (event.getButton() == MouseButton.PRIMARY &&
                     event.getClickCount() == 2 &&
                     creationState == CreationState.WAITING &&
                     !selectedShape.isEmpty()) {
-                Node target = event.getPickResult().getIntersectedNode();
-                if (target != null && createdShapes.contains(target)) {
-                    baseInitX = target.getTranslateX();
-                    baseInitY = target.getTranslateY();
-                } else {
-                    baseInitX = event.getX();
-                    baseInitY = event.getY();
-                }
+                Point2D localPoint = contentGroup.sceneToLocal(event.getSceneX(), event.getSceneY());
+                baseInitX = localPoint.getX();
+                baseInitY = localPoint.getY();
                 creationState = CreationState.SETTING_BASE;
                 System.out.println("Начало создания основания зафиксировано: (" + baseInitX + ", " + baseInitY + ").");
                 createBaseProjection(baseInitX, baseInitY);
             }
         });
-        canvas3D.setOnScroll((ScrollEvent event) -> {
+
+        // Обработка скроллинга мыши
+        canvas3D.addEventFilter(ScrollEvent.SCROLL, event -> {
             double delta = event.getDeltaY();
             double scale = canvas3D.getScaleX();
             double newScale = scale + delta / 500;
@@ -132,21 +187,10 @@ public class ShapeController {
             canvas3D.setScaleY(newScale);
             canvas3D.setScaleZ(newScale);
         });
-        canvas3D.setOnMousePressed(event -> {
-            if (creationState == CreationState.WAITING && event.getButton() == MouseButton.PRIMARY) {
-                Node picked = event.getPickResult().getIntersectedNode();
-                if (picked != null && createdShapes.contains(picked)) {
-                    selectShape(picked);
-                    event.consume();
-                } else {
-                    deselectShape();
-                }
-            }
-        });
 
-        // Обработчик нажатия клавиш для вращения выбранной фигуры по осям X и Y с помощью стрелок
+        // Обработка нажатий клавиш (перемещение выбранной фигуры)
         canvas3D.setFocusTraversable(true);
-        canvas3D.setOnKeyPressed(e -> {
+        canvas3D.addEventFilter(KeyEvent.KEY_PRESSED, e -> {
             if (selectedNode != null) {
                 Rotate rx = (Rotate) selectedNode.getProperties().get("rotateX");
                 Rotate ry = (Rotate) selectedNode.getProperties().get("rotateY");
@@ -164,6 +208,7 @@ public class ShapeController {
             }
         });
 
+        // Кнопки управления фигурами
         btnDeleteAll.setOnAction(e -> deleteAllShapes());
         btnDeleteLast.setOnAction(e -> deleteLastShape());
         btnDeleteSelected.setOnAction(e -> deleteSelectedShape());
@@ -224,12 +269,13 @@ public class ShapeController {
         baseProjection = new Rectangle(x, y, 0, 0);
         baseProjection.setFill(Color.color(0, 0, 1, 0.3));
         baseProjection.setStroke(Color.BLUE);
-        canvas3D.getChildren().add(baseProjection);
+        contentGroup.getChildren().add(baseProjection);
     }
 
     private void updateBaseProjection(MouseEvent event) {
-        double currentX = event.getX();
-        double currentY = event.getY();
+        Point2D localPoint = contentGroup.sceneToLocal(event.getSceneX(), event.getSceneY());
+        double currentX = localPoint.getX();
+        double currentY = localPoint.getY();
         double newX = Math.min(baseInitX, currentX);
         double newY = Math.min(baseInitY, currentY);
         double width = Math.abs(currentX - baseInitX);
@@ -241,10 +287,11 @@ public class ShapeController {
     }
 
     private void updateHeightIndicator(MouseEvent event) {
-        double currentY = event.getY();
-        double currentHeight = Math.abs(currentY - heightInitScreen);
+        Point2D localPoint = contentGroup.sceneToLocal(event.getSceneX(), event.getSceneY());
+        double currentY = localPoint.getY();
+        double currentHeight = Math.abs(currentY - heightInitLocal);
         if (heightIndicator != null) {
-            heightIndicator.setEndY(heightInitScreen + (currentY >= heightInitScreen ? currentHeight : -currentHeight));
+            heightIndicator.setEndY(heightInitLocal + (currentY >= heightInitLocal ? currentHeight : -currentHeight));
         }
     }
 
@@ -257,7 +304,7 @@ public class ShapeController {
         heightIndicator.setEndY(startY);
         heightIndicator.setStroke(Color.RED);
         heightIndicator.setStrokeWidth(2);
-        canvas3D.getChildren().add(heightIndicator);
+        contentGroup.getChildren().add(heightIndicator);
     }
 
     private void create3DShapeFromBaseAndHeight() {
@@ -318,7 +365,7 @@ public class ShapeController {
                     cylinder.setMaterial(new PhongMaterial(Color.ORANGE));
                     shape = cylinder;
                 } else {
-                    MeshView ellipseCylinder = createEllipticalCylinder((float)(baseWidth/2), (float)(baseDepth/2), (float)Math.abs(shapeHeight), 36, Color.ORANGE);
+                    MeshView ellipseCylinder = createEllipticalCylinder((float)(baseWidth / 2), (float)(baseDepth / 2), (float)Math.abs(shapeHeight), 36, Color.ORANGE);
                     ellipseCylinder.setTranslateX(centerX);
                     ellipseCylinder.setTranslateY(centerY);
                     ellipseCylinder.setTranslateZ(Math.abs(shapeHeight) / 2);
@@ -331,27 +378,25 @@ public class ShapeController {
         }
         if (shape != null) {
             final Node finalShape = shape;
-            // Добавляем отдельные Rotate-трансформации для вращения по осям X и Y с помощью стрелок
+            finalShape.setDepthTest(DepthTest.ENABLE);
+
             Rotate shapeRotateX = new Rotate(0, Rotate.X_AXIS);
             Rotate shapeRotateY = new Rotate(0, Rotate.Y_AXIS);
             finalShape.getTransforms().addAll(shapeRotateX, shapeRotateY);
             finalShape.getProperties().put("rotateX", shapeRotateX);
             finalShape.getProperties().put("rotateY", shapeRotateY);
 
-            // Обработчики для перемещения и поворота (вокруг оси Z) с помощью мыши
-            final double[] dragStart = new double[2];   // Для хранения начальной позиции мыши или угла
-            final double[] initTranslate = new double[2]; // Для хранения исходных значений translateX/Y
+            final double[] dragStart = new double[2];
+            final double[] initTranslate = new double[2];
 
             finalShape.setOnMousePressed(e -> {
                 if (e.getButton() == MouseButton.PRIMARY) {
                     selectShape(finalShape);
                     if (e.isControlDown()) {
-                        // Режим поворота (по оси Z) с использованием мыши
                         dragStart[0] = e.getSceneX();
                         dragStart[1] = finalShape.getRotate();
                     } else {
-                        // Режим перемещения: используем координаты относительно canvas3D
-                        Point2D localPoint = canvas3D.sceneToLocal(e.getSceneX(), e.getSceneY());
+                        Point2D localPoint = contentGroup.sceneToLocal(e.getSceneX(), e.getSceneY());
                         dragStart[0] = localPoint.getX();
                         dragStart[1] = localPoint.getY();
                         initTranslate[0] = finalShape.getTranslateX();
@@ -364,12 +409,10 @@ public class ShapeController {
             finalShape.setOnMouseDragged(e -> {
                 if (e.getButton() == MouseButton.PRIMARY) {
                     if (e.isControlDown()) {
-                        // Режим поворота (по оси Z) с использованием мыши
                         double dx = e.getSceneX() - dragStart[0];
                         finalShape.setRotate(dragStart[1] + dx);
                     } else {
-                        // Режим перемещения: пересчитываем координаты относительно canvas3D
-                        Point2D localPoint = canvas3D.sceneToLocal(e.getSceneX(), e.getSceneY());
+                        Point2D localPoint = contentGroup.sceneToLocal(e.getSceneX(), e.getSceneY());
                         double dx = localPoint.getX() - dragStart[0];
                         double dy = localPoint.getY() - dragStart[1];
                         finalShape.setTranslateX(initTranslate[0] + dx);
@@ -380,7 +423,6 @@ public class ShapeController {
             });
 
             finalShape.setOnScroll(e -> {
-                // Масштабирование: изменяем uniform scale фигуры
                 double delta = e.getDeltaY();
                 double scale = finalShape.getScaleX() + delta / 500;
                 if (scale < 0.1) scale = 0.1;
@@ -392,7 +434,7 @@ public class ShapeController {
 
             createdShapes.add(finalShape);
             lastShape = finalShape;
-            canvas3D.getChildren().add(finalShape);
+            contentGroup.getChildren().add(finalShape);
         }
     }
 
@@ -417,8 +459,8 @@ public class ShapeController {
             int bottomNext = next;
             int topCurrent = i + divisions;
             int topNext = next + divisions;
-            mesh.getFaces().addAll(bottomCurrent,0, bottomNext,0, topCurrent,0);
-            mesh.getFaces().addAll(bottomNext,0, topNext,0, topCurrent,0);
+            mesh.getFaces().addAll(bottomCurrent, 0, bottomNext, 0, topCurrent, 0);
+            mesh.getFaces().addAll(bottomNext, 0, topNext, 0, topCurrent, 0);
         }
         int bottomCenterIndex = mesh.getPoints().size() / 3;
         mesh.getPoints().addAll(0f, 0f, 0f);
@@ -426,14 +468,15 @@ public class ShapeController {
         mesh.getPoints().addAll(0f, 0f, height);
         for (int i = 0; i < divisions; i++) {
             int next = (i + 1) % divisions;
-            mesh.getFaces().addAll(bottomCenterIndex,0, next,0, i,0);
+            mesh.getFaces().addAll(bottomCenterIndex, 0, next, 0, i, 0);
         }
         for (int i = 0; i < divisions; i++) {
             int next = (i + 1) % divisions;
-            mesh.getFaces().addAll(topCenterIndex,0, i + divisions,0, next + divisions,0);
+            mesh.getFaces().addAll(topCenterIndex, 0, i + divisions, 0, next + divisions, 0);
         }
         MeshView ellipticalCylinder = new MeshView(mesh);
         ellipticalCylinder.setMaterial(new PhongMaterial(color));
+        ellipticalCylinder.setDepthTest(DepthTest.ENABLE);
         return ellipticalCylinder;
     }
 
@@ -456,12 +499,13 @@ public class ShapeController {
                 int p1 = p0 + 1;
                 int p2 = p0 + (divisions + 1);
                 int p3 = p2 + 1;
-                mesh.getFaces().addAll(p0,0, p2,0, p1,0);
-                mesh.getFaces().addAll(p1,0, p2,0, p3,0);
+                mesh.getFaces().addAll(p0, 0, p2, 0, p1, 0);
+                mesh.getFaces().addAll(p1, 0, p2, 0, p3, 0);
             }
         }
         MeshView ellipsoidalSphere = new MeshView(mesh);
         ellipsoidalSphere.setMaterial(new PhongMaterial(color));
+        ellipsoidalSphere.setDepthTest(DepthTest.ENABLE);
         return ellipsoidalSphere;
     }
 
@@ -478,17 +522,18 @@ public class ShapeController {
                 -halfW, 0,  halfD
         );
         mesh.getFaces().addAll(
-                0,0, 1,0, 2,0,
-                0,0, 2,0, 3,0,
-                0,0, 3,0, 4,0,
-                0,0, 4,0, 1,0
+                0, 0, 1, 0, 2, 0,
+                0, 0, 2, 0, 3, 0,
+                0, 0, 3, 0, 4, 0,
+                0, 0, 4, 0, 1, 0
         );
         mesh.getFaces().addAll(
-                1,0, 2,0, 3,0,
-                1,0, 3,0, 4,0
+                1, 0, 2, 0, 3, 0,
+                1, 0, 3, 0, 4, 0
         );
         MeshView pyramid = new MeshView(mesh);
         pyramid.setMaterial(new PhongMaterial(color));
+        pyramid.setDepthTest(DepthTest.ENABLE);
         return pyramid;
     }
 
@@ -513,7 +558,7 @@ public class ShapeController {
 
     private void deleteAllShapes() {
         for (Node n : createdShapes) {
-            canvas3D.getChildren().remove(n);
+            contentGroup.getChildren().remove(n);
         }
         createdShapes.clear();
         lastShape = null;
@@ -522,7 +567,7 @@ public class ShapeController {
 
     private void deleteLastShape() {
         if (lastShape != null) {
-            canvas3D.getChildren().remove(lastShape);
+            contentGroup.getChildren().remove(lastShape);
             createdShapes.remove(lastShape);
             lastShape = createdShapes.isEmpty() ? null : createdShapes.get(createdShapes.size() - 1);
         }
@@ -530,7 +575,7 @@ public class ShapeController {
 
     private void deleteSelectedShape() {
         if (selectedNode != null) {
-            canvas3D.getChildren().remove(selectedNode);
+            contentGroup.getChildren().remove(selectedNode);
             createdShapes.remove(selectedNode);
             selectedNode = null;
         }
@@ -567,7 +612,6 @@ public class ShapeController {
     @FXML
     public void createShapeFromInput() {
         try {
-            // Интерпретируем введенные координаты как отсчитанные от центра (0,0)
             double inputX = Double.parseDouble(txtBaseX.getText());
             double inputY = Double.parseDouble(txtBaseY.getText());
             double width = Double.parseDouble(txtWidth.getText());
@@ -584,7 +628,7 @@ public class ShapeController {
             baseProjection.setHeight(depth);
             shapeHeight = h;
             create3DShapeFromBaseAndHeight();
-            canvas3D.getChildren().remove(baseProjection);
+            contentGroup.getChildren().remove(baseProjection);
         } catch (NumberFormatException ex) {
             System.out.println("Неверный формат входных данных");
         }
