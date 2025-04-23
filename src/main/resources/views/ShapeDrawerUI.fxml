@@ -10,8 +10,6 @@
 <?import javafx.scene.layout.AnchorPane?>
 
 <BorderPane xmlns:fx="http://javafx.com/fxml/1" fx:controller="org.example.huinia.controllers.ShapeController">
-
-    <!-- Верхняя панель с кнопками -->
     <top>
         <HBox spacing="10" alignment="CENTER" prefHeight="60"
               style="-fx-background-color: #444444; -fx-padding: 10;">
@@ -19,9 +17,9 @@
                     style="-fx-font-size: 16px; -fx-text-fill: white; -fx-background-color: #5A5A5A;"/>
             <Button text="Куб" onAction="#selectCube"
                     style="-fx-font-size: 16px; -fx-text-fill: white; -fx-background-color: #5A5A5A;"/>
-            <Button text="Пирамида" onAction="#selectPyramid"
+            <Button text="Эллиптическая дырка" onAction="#selectEllipticalHole"
                     style="-fx-font-size: 16px; -fx-text-fill: white; -fx-background-color: #5A5A5A;"/>
-            <Button text="Цилиндр" onAction="#selectCylinder"
+            <Button text="Прямоугольная дырка" onAction="#selectRectangularHole"
                     style="-fx-font-size: 16px; -fx-text-fill: white; -fx-background-color: #5A5A5A;"/>
             <Button fx:id="btnDeleteAll" text="Удалить все"
                     style="-fx-font-size: 16px; -fx-text-fill: white; -fx-background-color: #AA0000;"/>
@@ -29,44 +27,37 @@
                     style="-fx-font-size: 16px; -fx-text-fill: white; -fx-background-color: #AA0000;"/>
             <Button fx:id="btnDeleteSelected" text="Удалить выбранную"
                     style="-fx-font-size: 16px; -fx-text-fill: white; -fx-background-color: #AA0000;"/>
+            <Button fx:id="btnTriangulate"
+                    text="3D-Delaunay"
+                    onAction="#onTriangulate"
+                    style="-fx-font-size:16px; -fx-text-fill:white; -fx-background-color:#0066AA;"/>
         </HBox>
     </top>
-
-    <!-- Центральная область для 3D-сцены -->
     <center>
         <AnchorPane fx:id="canvas3D" prefWidth="800" prefHeight="600" style="-fx-background-color: #FFFFFF;">
-            <!-- Здесь может быть клип или дополнительные настройки, если потребуется -->
+            <!-- Контент 3D-сцены -->
         </AnchorPane>
     </center>
-
-    <!-- Нижняя панель с полями ввода -->
     <bottom>
         <GridPane hgap="10" vgap="10" prefHeight="100"
                   style="-fx-background-color: #EEEEEE; -fx-padding: 10;">
             <padding>
                 <Insets top="10" right="10" bottom="5" left="10"/>
             </padding>
-            <!-- Строка 0 -->
             <Label text="Base X:" style="-fx-font-size: 16px; -fx-font-weight: bold;" GridPane.rowIndex="0" GridPane.columnIndex="0"/>
             <TextField fx:id="txtBaseX" style="-fx-font-size: 16px;" GridPane.rowIndex="0" GridPane.columnIndex="1"/>
             <Label text="Base Y:" style="-fx-font-size: 16px; -fx-font-weight: bold;" GridPane.rowIndex="0" GridPane.columnIndex="2"/>
             <TextField fx:id="txtBaseY" style="-fx-font-size: 16px;" GridPane.rowIndex="0" GridPane.columnIndex="3"/>
             <Label text="Height:" style="-fx-font-size: 16px; -fx-font-weight: bold;" GridPane.rowIndex="0" GridPane.columnIndex="4"/>
             <TextField fx:id="txtHeight" style="-fx-font-size: 16px;" GridPane.rowIndex="0" GridPane.columnIndex="5"/>
-
-
-            <!-- Строка 1 -->
             <Label text="Width:" style="-fx-font-size: 16px; -fx-font-weight: bold;" GridPane.rowIndex="1" GridPane.columnIndex="0"/>
             <TextField fx:id="txtWidth" style="-fx-font-size: 16px;" GridPane.rowIndex="1" GridPane.columnIndex="1"/>
             <Label text="Depth:" style="-fx-font-size: 16px; -fx-font-weight: bold;" GridPane.rowIndex="1" GridPane.columnIndex="2"/>
             <TextField fx:id="txtDepth" style="-fx-font-size: 16px;" GridPane.rowIndex="1" GridPane.columnIndex="3"/>
-            <Button text="Создать по координатам" onAction="#createShapeFromInput"
+            <!-- Внутри <HBox> рядом с кнопками удаления -->
+             <Button text="Создать по координатам" onAction="#createShapeFromInput"
                     style="-fx-font-size: 16px; -fx-font-weight: bold;"
                     GridPane.rowIndex="1" GridPane.columnIndex="4" GridPane.columnSpan="4"/>
-
-            <!-- Строка 2 -->
-
-
         </GridPane>
     </bottom>
 </BorderPane>
