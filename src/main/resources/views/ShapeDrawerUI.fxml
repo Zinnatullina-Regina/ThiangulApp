@@ -27,11 +27,12 @@
                     style="-fx-font-size: 16px; -fx-text-fill: white; -fx-background-color: #AA0000;"/>
             <Button fx:id="btnDeleteSelected" text="Удалить выбранную"
                     style="-fx-font-size: 16px; -fx-text-fill: white; -fx-background-color: #AA0000;"/>
-            <Button fx:id="btnTriangulate"
-                    text="3D-Delaunay"
-                    onAction="#onTriangulate"
-                    style="-fx-font-size:16px; -fx-text-fill:white; -fx-background-color:#0066AA;"/>
+            <Button fx:id="btnTriangulate" text="Триангуляция"
+                    onAction="#onTriangulate" style="-fx-font-size: 16px; -fx-text-fill: white; -fx-background-color: #AA0000;"/>
+
+
         </HBox>
+
     </top>
     <center>
         <AnchorPane fx:id="canvas3D" prefWidth="800" prefHeight="600" style="-fx-background-color: #FFFFFF;">

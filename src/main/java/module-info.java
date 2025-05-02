@@ -16,9 +16,9 @@ module org.example.huinia {
 
     opens org.example.huinia to javafx.fxml;
     exports org.example.huinia;
+    exports org.example.huinia.triangulation;
 
     opens org.example.huinia.controllers to javafx.fxml;
-
-
+    opens   org.example.huinia.triangulation to javafx.fxml;
 }
 

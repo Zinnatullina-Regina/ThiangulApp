@@ -1,7 +1,6 @@
 package org.example.huinia.controllers;
 
 import eu.mihosoft.jcsg.CSG;
-import eu.mihosoft.jcsg.ext.quickhull3d.Point3d;
 import eu.mihosoft.vvecmath.Transform;
 import javafx.beans.binding.Bindings;
 import javafx.fxml.FXML;
@@ -26,21 +25,70 @@ import javafx.scene.transform.Rotate;
 import javafx.scene.DepthTest;
 import org.example.huinia.converters.MeshToCSGConverter;
 import org.example.huinia.converters.CSGToMeshViewConverter;
-import org.example.huinia.Delaunay.Delaunay3D;
-import org.example.huinia.Delaunay.DelaunayVisualizer;
+import javafx.scene.shape.TriangleMesh;
+import javafx.scene.shape.MeshView;
+import org.example.huinia.triangulation.Shape3;
+import org.example.huinia.triangulation.CSGUtils;
+import org.example.huinia.triangulation.DelaunayTriangulator;
+import org.example.huinia.triangulation.MeshBuilder;
+import eu.mihosoft.jcsg.CSG;
+import javafx.scene.shape.MeshView;
 import javafx.event.ActionEvent;
-
 import java.util.*;
 
 import java.util.ArrayList;
 import java.util.List;
 
-import static org.example.huinia.Delaunay.Delaunay3D.buildSurfaceMesh;
-
 public class ShapeController {
 
+   // private List<Node> createdShapes = new ArrayList<>();
 
     @FXML private Button btnTriangulate;
+
+    @FXML
+    public void onTriangulate(ActionEvent event) {
+        // 1) Собираем все CSG-модели, которые вы хранили в currentCSGMap
+        Collection<CSG> allCSG = currentCSGMap.values();
+
+        if (allCSG.isEmpty()) {
+            System.out.println("Нет фигур для триангуляции");
+            return;
+        }
+
+        // 2) Делаем union по всем элементам
+        Iterator<CSG> it = allCSG.iterator();
+        CSG unionCSG = it.next();
+        while (it.hasNext()) {
+            unionCSG = unionCSG.intersect(it.next());
+        }
+
+        // 3) Переводим union-CSG в нашу Shape3D
+        Shape3 shape = CSGUtils.csgToShape3D(unionCSG);
+
+        // 4) Триангулируем Constrained Delaunay
+        DelaunayTriangulator.triangulateShape(shape);
+
+        // 5) Строим каркасный MeshView
+        MeshView mesh = MeshBuilder.buildMesh(shape);
+
+        // 6) Очищаем всё, оставляя только фон-grid
+        contentGroup.getChildren().clear();
+        contentGroup.getChildren().add(gridGroup);
+
+        // 7) Ставим mesh **ровно в центр** canvas3D
+        double cx = canvas3D.getWidth()  / 2.0 -150;
+        double cy = canvas3D.getHeight() / 2.0 -150;
+        mesh.setTranslateX(cx);
+        mesh.setTranslateY(cy);
+        mesh.setTranslateZ(0);
+
+        // 8) Вешаем mesh
+        contentGroup.getChildren().add(mesh);
+    }
+
+
+
+
     @FXML private AnchorPane canvas3D;
     @FXML private Button btnDeleteAll, btnDeleteLast, btnDeleteSelected;
     @FXML private TextField txtBaseX, txtBaseY, txtWidth, txtDepth, txtHeight;
@@ -120,114 +168,8 @@ public class ShapeController {
         btnDeleteAll.setOnAction(e -> deleteAllShapes());
         btnDeleteLast.setOnAction(e -> deleteLastShape());
         btnDeleteSelected.setOnAction(e -> deleteSelectedShape());
-        System.out.println("initialize() вызван");       // <<-- временный отладочный вывод
-        System.out.println("btnTriangulate = " + btnTriangulate);
         btnTriangulate.setOnAction(this::onTriangulate);
-    }
 
-    @FXML
-    private void onTriangulate(ActionEvent event) {
-        System.out.println("onTriangulate() вызван");
-
-        // 1) Объединяем все CSG (включая дырки)
-        CSG totalCSG = null;
-        for (CSG c : currentCSGMap.values()) {
-            totalCSG = (totalCSG == null) ? c : totalCSG.union(c);
-        }
-        if (totalCSG == null) {
-            System.err.println("Нет объектов для триангуляции");
-            return;
-        }
-        System.out.println("Всего CSG-объектов: " + currentCSGMap.size());
-
-        // 2) Конвертируем в MeshView и собираем список вершин
-        MeshView unionView = CSGToMeshViewConverter.convert(totalCSG);
-        TriangleMesh unionMesh = (TriangleMesh) unionView.getMesh();
-        float[] rawPoints = unionMesh.getPoints().toArray(null);
-        List<Point3d> points3d = new ArrayList<>(rawPoints.length / 3);
-        for (int i = 0; i < rawPoints.length; i += 3) {
-            points3d.add(new Point3d(rawPoints[i], rawPoints[i + 1], rawPoints[i + 2]));
-        }
-        System.out.println("Всего вершин: " + points3d.size());
-
-        // 3) Запускаем 3D-Delaunay
-        List<Delaunay3D.Tetrahedron> allTets = Delaunay3D.triangulate(points3d);
-        System.out.println("Сгенерировано тетраэдров всего: " + allTets.size());
-
-        // 4) Отфильтровываем тетраэдры, чьи центроиды вне объёма (в дырках или снаружи)
-        double eps = 0.05; // радиус «тестового» шарика — подберите под масштаб вашей сцены
-        // создаём прототип маленького шарика
-        CSG protoSphere = CSG.sphere((float) eps, 8, 8);
-        List<Delaunay3D.Tetrahedron> filtered = new ArrayList<>();
-        for (Delaunay3D.Tetrahedron t : allTets) {
-            // центроид тетраэдра
-            Point3d c = new Point3d(
-                    (t.a.x + t.b.x + t.c.x + t.d.x) / 4.0,
-                    (t.a.y + t.b.y + t.c.y + t.d.y) / 4.0,
-                    (t.a.z + t.b.z + t.c.z + t.d.z) / 4.0
-            );
-            // сдвигаем шарик в эту точку
-            CSG tiny = protoSphere.transformed(
-                    Transform.unity().translate((float) c.x, (float) c.y, (float) c.z)
-            );
-            // если пересечение шарика с totalCSG непустое — центроид внутри «твёрдого» объёма
-            if (!tiny.intersect(totalCSG).getPolygons().isEmpty()) {
-                filtered.add(t);
-            }
-        }
-        System.out.println("Тетраэдров после фильтрации: " + filtered.size());
-
-        // 5) Строим проволочный каркас из оставшихся тетраэдров
-        TriangleMesh wireMesh = buildAllTetraMesh(filtered);
-        MeshView wireView = new MeshView(wireMesh);
-        wireView.setDrawMode(DrawMode.LINE);
-        wireView.setCullFace(CullFace.NONE);
-        wireView.setMaterial(new PhongMaterial(Color.BLACK));
-        wireView.setUserData("wireAll");
-
-        // Удаляем старую визуализацию и добавляем новую
-        contentGroup.getChildren().removeIf(n -> "wireAll".equals(n.getUserData()));
-        contentGroup.getChildren().add(wireView);
-    }
-
-    /**
-     * Вспомогательный метод, собирающий из списка тетраэдров один TriangleMesh,
-     * в котором каждая грань каждого тетраэдра добавлена к mesh.getFaces().
-     */
-    private TriangleMesh buildAllTetraMesh(List<Tetrahedron> tets) {
-        TriangleMesh mesh = new TriangleMesh();
-        mesh.getTexCoords().addAll(0, 0);  // фиктивный UV
-
-        Map<Point3d,Integer> idx = new HashMap<>();
-        int nextIndex = 0;
-
-        for (Tetrahedron t : tets) {
-            Point3d[] P = new Point3d[]{t.a, t.b, t.c, t.d};
-            int[] faceIdx = new int[4];
-
-            // регистрируем 4 вершины
-            for (int i = 0; i < 4; i++) {
-                Point3d p = P[i];
-                if (!idx.containsKey(p)) {
-                    mesh.getPoints().addAll((float) p.x, (float) p.y, (float) p.z);
-                    idx.put(p, nextIndex++);
-                }
-                faceIdx[i] = idx.get(p);
-            }
-
-            // добавляем 4 грани (каждая — треугольник из трёх индексов)
-            int[][] faces = {
-                    {faceIdx[0], faceIdx[1], faceIdx[2]},
-                    {faceIdx[0], faceIdx[1], faceIdx[3]},
-                    {faceIdx[0], faceIdx[2], faceIdx[3]},
-                    {faceIdx[1], faceIdx[2], faceIdx[3]}
-            };
-            for (int[] f : faces) {
-                mesh.getFaces().addAll(f[0], 0, f[1], 0, f[2], 0);
-            }
-        }
-
-        return mesh;
     }
 
 
@@ -523,7 +465,7 @@ public class ShapeController {
                 result.setMaterial(((Shape3D) currentNode).getMaterial());
             }
             result.getProperties().put("shapeId", shapeId);
-
+            currentCSGMap.put(shapeId, localResult);
             return result;
         } catch (Exception ex) {
             System.err.println("Ошибка в applyHoleToModified: " + ex.getMessage());
@@ -558,6 +500,7 @@ public class ShapeController {
                 result.setMaterial(((Shape3D) currentNode).getMaterial());
             }
             result.getProperties().put("shapeId", shapeId);
+            currentCSGMap.put(shapeId, localResult);
 
             return result;
         } catch (Exception ex) {
